@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cruce diario Alocredit · Cobyser</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1d2330;--mut:#5d6575;--bd:#dfe3ea;--pri:#1f3864;--ok:#1e7a3c;--warn:#a15c00;--err:#b42318;}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--tx);font-size:15px;line-height:1.45}
+header{background:var(--pri);color:#fff;padding:14px 16px}
+header h1{margin:0;font-size:18px}
+header small{opacity:.8}
+main{max-width:980px;margin:0 auto;padding:16px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 10px;font-size:16px}
+label{display:block;font-weight:600;margin:12px 0 4px}
+.hint{color:var(--mut);font-size:13px;margin:2px 0 0}
+input[type=email],input[type=password],input[type=date]{width:100%;max-width:360px;padding:9px;border:1px solid var(--bd);border-radius:8px;font-size:15px}
+input[type=file]{width:100%;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:#fafbfc}
+button{background:var(--pri);color:#fff;border:0;border-radius:8px;padding:11px 18px;font-size:15px;font-weight:600;cursor:pointer;margin-top:14px}
+button:disabled{opacity:.5;cursor:not-allowed}
+button.sec{background:#fff;color:var(--pri);border:1px solid var(--pri)}
+#log{white-space:pre-wrap;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;background:#0f1522;color:#d7e0f0;border-radius:8px;padding:10px;max-height:260px;overflow:auto;display:none}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{border-bottom:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:#f0f2f6}
+td.n{text-align:right;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.kpi{border:1px solid var(--bd);border-radius:8px;padding:10px}
+.kpi b{display:block;font-size:20px}
+.kpi span{color:var(--mut);font-size:12.5px}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.err{color:var(--err)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.hide{display:none}
+.badge{display:inline-block;background:#eef2f8;border-radius:6px;padding:1px 7px;font-size:12px;margin-left:6px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cruce diario Alocredit</h1>
+  <small>Cobyser · versión 1 · los archivos se procesan en este computador, no se suben a internet</small>
+</header>
+<main>
+
+<section id="secLogin" class="card">
+  <h2>Ingresar</h2>
+  <label for="email">Correo</label>
+  <input id="email" type="email" autocomplete="username">
+  <label for="pass">Clave</label>
+  <input id="pass" type="password" autocomplete="current-password">
+  <div><button id="btnLogin">Ingresar</button></div>
+  <p id="loginMsg" class="hint"></p>
+</section>
+
+<section id="secApp" class="hide">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>Usuario: <b id="who"></b><span id="modo" class="badge"></span></div>
+      <button id="btnLogout" class="sec" style="margin-top:0">Salir</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>1. Archivos del día</h2>
+    <label for="fCorte">Fecha de corte</label>
+    <input id="fCorte" type="date">
+    <p class="hint">Normalmente es la fecha de hoy (la de la base que llegó de Alocredit).</p>
+
+    <label for="fHoy">Base de Alocredit de HOY <span class="err">*</span></label>
+    <input id="fHoy" type="file" accept=".xlsx,.xls,.csv">
+
+    <label for="fAyer">Base de Alocredit de AYER</label>
+    <input id="fAyer" type="file" accept=".xlsx,.xls,.csv">
+    <p class="hint">Sirve para ver nuevos, pagos y rodamiento de franjas. Si no la cargas, esas columnas quedan "Sin comparación".</p>
+
+    <label for="fGest">Archivos de gestión (puedes seleccionar varios a la vez)</label>
+    <input id="fGest" type="file" accept=".xlsx,.xls,.csv" multiple>
+    <p class="hint">Informe de gestión del CRM (del 1 del mes a hoy), resultados del bot cognitivo y del bot IA. La página reconoce cada uno por sus columnas.</p>
+
+    <button id="btnProc">Procesar</button>
+  </div>
+
+  <div class="card">
+    <h2>2. Avance</h2>
+    <div id="log"></div>
+    <p id="estado" class="hint">Aún no se ha procesado nada.</p>
+  </div>
+
+  <div id="secRes" class="hide">
+    <div class="card">
+      <h2>3. Resultado</h2>
+      <div class="kpis" id="kpis"></div>
+      <div class="row">
+        <button id="btnXlsx">Descargar Excel</button>
+        <span id="saveMsg" class="hint"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Conciliación</h2>
+      <div class="tw" id="concil"></div>
+    </div>
+  </div>
+</section>
+
+</main>
+<script>
+"use strict";
+/* ================== CONFIGURACIÓN ================== */
+const SUPABASE_URL = "https://oxtthfbdehljmhwylzfq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_8TKEEHBvuI0mWkT6uWCkrA_5zEKYKgw";
+const VERSION = "1.0.0";
+const MODO_PRUEBA = new URLSearchParams(location.search).get("prueba") === "1";
+
+/* Jerarquía de mejor gestión (1 = mejor). PROVISIONAL hasta confirmar en reglas de cálculo. */
+const PESO_EFECTO = {"0200":1,"0208":1,"0202":1,"0201":2,"0203":3,"0206":4,"0205":5,"0207":6};
+const CODIGOS_PDP = ["0200","0208"];
+
+/* ================== UTILIDADES ================== */
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function log(msg, cls){ logEl.style.display="block"; const s=document.createElement("div"); if(cls) s.className=cls; s.textContent=msg; logEl.appendChild(s); logEl.scrollTop=logEl.scrollHeight; }
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function norm(s){ return String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().trim().replace(/[\s.\-]+/g,"_"); }
+function cedula(v){ if(v==null) return ""; let s=String(v).trim(); if(/^\d+\.0+$/.test(s)) s=s.replace(/\.0+$/,""); s=s.replace(/\D/g,"").replace(/^0+/,""); return s; }
+function txt(v){ return v==null ? "" : String(v).replace(/\s+/g," ").trim(); }
+function num(v){
+  if(v==null || v==="") return null;
+  if(typeof v==="number") return isFinite(v)?v:null;
+  let s=String(v).replace(/[$\s ]/g,"");
+  if(s==="") return null;
+  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s=s.replace(/\./g,"").replace(",",".");
+  else if(/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) s=s.replace(/,/g,"");
+  else s=s.replace(",",".");
+  const n=parseFloat(s); return isFinite(n)?n:null;
+}
+const pad = n => String(n).padStart(2,"0");
+function serialToParts(x){
+  const ms=Math.round((x-25569)*86400)*1000; const d=new Date(ms);
+  return {d:`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`, t:`${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`};
+}
+/* Devuelve {d:'YYYY-MM-DD', t:'HH:MM:SS'} o null */
+function fecha(v){
+  if(v==null || v==="") return null;
+  if(typeof v==="number"){ return (v>20000 && v<80000) ? serialToParts(v) : null; }
+  const s=String(v).trim(); let m;
+  if(/^\d{5}(\.\d+)?$/.test(s)){ const n=parseFloat(s); return (n>20000&&n<80000)?serialToParts(n):null; }
+  if((m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/)))
+    return {d:`${m[3]}-${pad(m[2])}-${pad(m[1])}`, t:`${pad(m[4]||0)}:${pad(m[5]||0)}:${pad(m[6]||0)}`};
+  if((m=s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?/)))
+    return {d:`${m[1]}-${m[2]}-${m[3]}`, t:`${m[4]||"00"}:${m[5]||"00"}:${m[6]||"00"}`};
+  return null;
+}
+function dateToISO(d){ return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function isoToUTC(s){ const [y,m,d]=s.split("-").map(Number); return Date.UTC(y,m-1,d); }
+function diasEntre(a,b){ return Math.round((isoToUTC(b)-isoToUTC(a))/86400000); }
+function finDeMes(iso){ const [y,m]=iso.split("-").map(Number); const d=new Date(Date.UTC(y,m,0)); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+function inicioMes(iso){ return iso.slice(0,8)+"01"; }
+function mesAnterior(iso,k){ let [y,m]=iso.split("-").map(Number); m-=k; while(m<1){m+=12;y--;} return `${y}-${pad(m)}`; }
+function isoToSerial(s){ return (isoToUTC(s)-Date.UTC(1899,11,30))/86400000; }
+function fmtDMY(iso){ return iso? iso.slice(8,10)+"/"+iso.slice(5,7) : ""; }
+const fmtN = n => (n==null?"":Number(n).toLocaleString("es-CO",{maximumFractionDigits:0}));
+const fmtP = n => (n==null||!isFinite(n)?"":(n*100).toFixed(1)+"%");
+
+/* Rango de mora por días (PROVISIONAL, mismas franjas de Alocredit) */
+function rangoPorDias(d){
+  if(d==null || isNaN(d)) return "";
+  if(d<=0) return "0";
+  const T=[[3,"1_3"],[15,"4_15"],[30,"16_30"],[45,"31_45"],[60,"46_60"],[90,"61_90"],[120,"91_120"],[150,"121_150"],[180,"151_180"],[209,"181_209"],[240,"210_240"]];
+  for(const [h,l] of T) if(d<=h) return l;
+  return "MAYOR_240";
+}
+function ordenRango(r){ const s=txt(r); if(s==="") return null; if(/^0+$/.test(s)) return 0; const m=s.match(/(\d+)/); return m?parseInt(m[1],10):null; }
+function esPago(r){ const s=txt(r); return s!=="" && /^0+(\.0+)?$/.test(s); }
+function partesCodigo(v){ const s=txt(v); if(!s) return {c:"",l:""}; const p=s.split(" - ").map(x=>x.trim()); if(p.length>=3) return {c:p[1],l:p.slice(2).join(" - ")}; if(p.length===2) return {c:p[0],l:p[1]}; return {c:(s.match(/^\d{3,4}/)||[""])[0], l:s}; }
+
+/* ================== LECTURA DE ARCHIVOS ================== */
+async function leerLibro(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, {type:"array", cellDates:false, dense:true});
+  const hojas=[];
+  for(const name of wb.SheetNames){
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[name], {defval:null, raw:true});
+    if(!rows.length) continue;
+    const mapa={}; Object.keys(rows[0]).forEach(k=>{ const n=norm(k); if(!(n in mapa)) mapa[n]=k; });
+    // incluir columnas que aparezcan después de la primera fila
+    for(let i=1;i<Math.min(rows.length,50);i++) Object.keys(rows[i]).forEach(k=>{ const n=norm(k); if(!(n in mapa)) mapa[n]=k; });
+    hojas.push({archivo:file.name, hoja:name, rows, mapa, cols:new Set(Object.keys(mapa))});
+  }
+  return hojas;
+}
+function g(row, mapa, ...nombres){ for(const n of nombres){ const k=mapa[n]; if(k!==undefined && row[k]!=null && row[k]!=="") return row[k]; } return null; }
+function tipoHoja(h){
+  const c=h.cols;
+  if(c.has("llave") && c.has("cedula") && (c.has("deuda_actual")||c.has("producto"))) return "base";
+  if(c.has("identificacion") && c.has("efecto") && (c.has("expr1")||c.has("rdate"))) return "crm";
+  if(c.has("rut") && c.has("estado_llamada") && c.has("fecha_llam")) return "bot_ia";
+  if(c.has("rut") && c.has("estado_llamada") && (c.has("fecha_esta")||c.has("fecha"))) return "bot_cog";
+  return null;
+}
+
+function cargarBase(hojas, etiqueta, conc){
+  const out=new Map(); let leidas=0, dup=0, sinLlave=0;
+  for(const h of hojas){
+    if(tipoHoja(h)!=="base"){ conc.push({archivo:h.archivo,hoja:h.hoja,tipo:"(ignorada)",leidas:h.rows.length,validas:0,duplicadas:0,cruzan:"",no_cruzan:"",nota:"No tiene columnas de base Alocredit"}); continue; }
+    let v=0, dh=0;
+    for(const r of h.rows){
+      leidas++;
+      const llave=txt(g(r,h.mapa,"llave")).toUpperCase();
+      if(!llave){ sinLlave++; continue; }
+      if(out.has(llave)){ dup++; dh++; continue; }
+      const fa=fecha(g(r,h.mapa,"fecha_asignacion"));
+      out.set(llave,{
+        llave, hoja:h.hoja,
+        nit:txt(g(r,h.mapa,"nit")),
+        producto:txt(g(r,h.mapa,"producto")).toUpperCase()||h.hoja.toUpperCase(),
+        contrato:txt(g(r,h.mapa,"contrato_x","contrato")),
+        estado:txt(g(r,h.mapa,"estado_actual")),
+        cliente:txt(g(r,h.mapa,"cliente")),
+        telefono:txt(g(r,h.mapa,"telefono")),
+        correo:txt(g(r,h.mapa,"correo")),
+        cedula:cedula(g(r,h.mapa,"cedula")),
+        ciudad:txt(g(r,h.mapa,"ciudad")).toLowerCase(),
+        capital:num(g(r,h.mapa,"capital_pendiente")),
+        gastos:num(g(r,h.mapa,"gastos_vencidos")),
+        deuda:num(g(r,h.mapa,"deuda_actual")),
+        vencido:num(g(r,h.mapa,"valor_cuotas_atrasadas")),
+        dias_ini:num(g(r,h.mapa,"dias_iniciales_mes")),
+        rango_ini:txt(g(r,h.mapa,"rango_inicial")),
+        rango:txt(g(r,h.mapa,"rango")),
+        comision:txt(g(r,h.mapa,"comision")),
+        fecha_asig: fa?fa.d:""
+      });
+      v++;
+    }
+    conc.push({archivo:h.archivo,hoja:h.hoja,tipo:etiqueta,leidas:h.rows.length,validas:v,duplicadas:dh,cruzan:"",no_cruzan:"",nota:""});
+  }
+  return {mapa:out, leidas, dup, sinLlave};
+}
+
+/* Gestiones normalizadas: {ced, f:'YYYY-MM-DD', t, canal, peso, label, directo, indirecto, asesor, pdpF, pdpV, origen} */
+function cargarGestiones(hojas, conc, corte){
+  const mesIni=inicioMes(corte);
+  const lista=[]; const vistosCRM=new Set(); let sinAccion=false;
+  const alertas={tipif:[], horario:[]};
+  for(const h of hojas){
+    const tipo=tipoHoja(h);
+    if(!tipo || tipo==="base"){ conc.push({archivo:h.archivo,hoja:h.hoja,tipo:tipo==="base"?"(base en gestiones: ignorada)":"(ignorada)",leidas:h.rows.length,validas:0,duplicadas:0,cruzan:"",no_cruzan:"",nota:"No se reconocieron columnas de gestión"}); continue; }
+    let v=0,d=0,fuera=0,sinF=0; const m=h.mapa;
+    for(const r of h.rows){
+      if(tipo==="crm"){
+        const ced=cedula(g(r,m,"identificacion")); if(!ced) continue;
+        const ft=fecha(g(r,m,"expr1"))||fecha(g(r,m,"rdate"));
+        if(!ft){ sinF++; continue; }
+        if(ft.d<mesIni || ft.d>corte){ fuera++; continue; }
+        const login=txt(g(r,m,"login"));
+        const key=ced+"|"+ft.d+" "+ft.t+"|"+login;
+        if(vistosCRM.has(key)){ d++; continue; } vistosCRM.add(key);
+        const cont=partesCodigo(g(r,m,"contacto")).c, ef=partesCodigo(g(r,m,"efecto"));
+        const acc=txt(g(r,m,"accion","acción"));
+        if(!m["accion"]) sinAccion=true;
+        const canal=/WHAT/i.test(acc)?"Asesor WhatsApp":(acc?"Asesor llamada":"Asesor");
+        const peso=PESO_EFECTO[ef.c]||6;
+        const directo = cont==="0110" && ef.c!=="0207";
+        const indirecto = cont==="0111";
+        if(cont==="0110" && ef.c==="0207") alertas.tipif.push({cedula:ced,fecha:ft.d,hora:ft.t,asesor:login,problema:"Contacto DEUDOR con efecto NO CONTESTAN"});
+        if(cont==="0112" && peso<=3) alertas.tipif.push({cedula:ced,fecha:ft.d,hora:ft.t,asesor:login,problema:"Contacto VACIO con efecto de contacto ("+ef.l+")"});
+        const hh=parseInt(ft.t.slice(0,2),10)+parseInt(ft.t.slice(3,5),10)/60;
+        const dow=new Date(isoToUTC(ft.d)).getUTCDay();
+        if(dow===0 || hh<7 || hh>=19 || (dow===6 && (hh<8 || hh>=15))) alertas.horario.push({cedula:ced,fecha:ft.d,hora:ft.t,asesor:login,canal});
+        let pdpF=null,pdpV=null;
+        if(CODIGOS_PDP.includes(ef.c)){
+          const fp=fecha(g(r,m,"fecha_promesa"))||fecha(g(r,m,"rdate_1"));
+          pdpF=fp?fp.d:null; pdpV=num(g(r,m,"valor_promesa","valor"));
+        }
+        lista.push({ced,f:ft.d,t:ft.t,canal,peso,label:ef.c+" "+ef.l,directo,indirecto,asesor:login,pdpF,pdpV,origen:"crm",hk:h.archivo+"|"+h.hoja});
+        v++;
+      } else {
+        const ced=cedula(g(r,m,"rut")); if(!ced) continue;
+        const ft = tipo==="bot_ia" ? fecha(g(r,m,"fecha_llam")) : (fecha(g(r,m,"fecha_esta"))||fecha(g(r,m,"fecha")));
+        if(!ft){ sinF++; continue; }
+        if(ft.d<mesIni || ft.d>corte){ fuera++; continue; }
+        const est=txt(g(r,m,"estado_llamada")).toUpperCase();
+        let peso=6,label="NO CONTACTO ("+est+")",directo=false,indirecto=false,pdpF=null,pdpV=null;
+        if(est==="TITULAR"){
+          directo=true; peso=3; label="CONTACTO TITULAR SIN ACUERDO";
+          if(tipo==="bot_ia"){
+            const pe=txt(g(r,m,"peso")).toUpperCase();
+            const fc=fecha(g(r,m,"fecha_de_compromisos"));
+            if(/COMPROMISO/.test(pe) || fc){ peso=1; label="COMPROMISO DE PAGO"; pdpF=fc?fc.d:null; pdpV=num(g(r,m,"pago")); }
+            else if(/DIFICULTAD/.test(pe)){ peso=2; label="DIFICULTAD DE PAGO"; }
+          }
+        } else if(est==="TERCERO" || est==="DE_PARTE_DE"){ indirecto=true; peso=4; label="CONTACTO CON TERCERO"; }
+        const canal = tipo==="bot_ia" ? "Bot IA" : "Bot cognitivo";
+        lista.push({ced,f:ft.d,t:ft.t,canal,peso,label,directo,indirecto,asesor:"",pdpF,pdpV,origen:tipo,hk:h.archivo+"|"+h.hoja});
+        v++;
+      }
+    }
+    const nombre={crm:"Gestión CRM (asesores)",bot_ia:"Bot IA (interactivo)",bot_cog:"Bot cognitivo"}[tipo];
+    const notas=[]; if(d) notas.push(d+" duplicadas exactas descartadas"); if(fuera) notas.push(fuera+" fuera del mes de corte"); if(sinF) notas.push(sinF+" sin fecha válida");
+    conc.push({archivo:h.archivo,hoja:h.hoja,tipo:nombre,leidas:h.rows.length,validas:v,duplicadas:d,cruzan:0,no_cruzan:0,nota:notas.join("; "),_tipo:tipo,_hoja:h.archivo+"|"+h.hoja});
+  }
+  return {lista, sinAccion, alertas};
+}
+
+/* ================== SUPABASE ================== */
+let sb=null, usuario=null;
+async function initAuth(){
+  if(MODO_PRUEBA){ mostrarApp("modo prueba (no guarda)"); return; }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const {data} = await sb.auth.getSession();
+  if(data.session) await validarUsuario(data.session.user);
+}
+async function validarUsuario(user){
+  const {data, error} = await sb.rpc("mi_rol");
+  if(error || !data){ $("loginMsg").textContent="Tu usuario no está autorizado. Pide a Federico que te agregue."; $("loginMsg").className="err"; await sb.auth.signOut(); return; }
+  usuario={email:user.email, rol:data}; mostrarApp(data);
+}
+function mostrarApp(modo){
+  $("secLogin").classList.add("hide"); $("secApp").classList.remove("hide");
+  $("who").textContent = usuario?usuario.email:"(sin usuario)"; $("modo").textContent=modo;
+  if(usuario && usuario.rol==="lector"){ $("btnProc").disabled=true; $("estado").textContent="Tu rol es solo lectura: no puedes procesar."; }
+}
+$("btnLogin").onclick = async ()=>{
+  $("loginMsg").textContent="Ingresando…"; $("loginMsg").className="hint";
+  const {data, error} = await sb.auth.signInWithPassword({email:$("email").value.trim(), password:$("pass").value});
+  if(error){ $("loginMsg").textContent="No se pudo ingresar: revisa correo y clave."; $("loginMsg").className="err"; return; }
+  await validarUsuario(data.user);
+};
+$("pass").addEventListener("keydown",e=>{ if(e.key==="Enter") $("btnLogin").click(); });
+$("btnLogout").onclick = async ()=>{ if(sb) await sb.auth.signOut(); location.reload(); };
+
+async function leerContexto(corte){
+  if(!sb || !usuario) return {};
+  const {data,error}=await sb.rpc("contexto_historico",{p_fecha:corte});
+  if(error){ log("⚠ No se pudo leer el histórico: "+error.message,"warn"); return {}; }
+  return data||{};
+}
+async function enLotes(arr, n, fn){ for(let i=0;i<arr.length;i+=n){ await fn(arr.slice(i,i+n)); } }
+async function guardar(R){
+  const corte=R.corte, mes=inicioMes(corte);
+  log("Guardando histórico en Supabase…");
+  await enLotes(R.filas.map(f=>({llave:f.llave,producto:f.producto,primera_fecha:(f.fecha_asig && f.fecha_asig<corte)?f.fecha_asig:corte,fecha:corte,fecha_pago:f.pago_hoy?corte:""})),2000, async lote=>{
+    const {error}=await sb.rpc("registrar_obligaciones",{filas:lote}); if(error) throw new Error("obligaciones: "+error.message);
+  });
+  log("  ✓ obligaciones");
+  const om=R.filas.map(f=>({mes,llave:f.llave,producto:f.producto,estado:f.estado,rango_inicial:f.rango_ini,rango_actual:f.rango,dias_mora:f.dias_hoy,deuda_actual:f.deuda,capital_pendiente:f.capital,novedad:f.novedad,mejor_gestion:f.mg?f.mg.label:null,mejor_gestion_peso:f.mg?f.mg.peso:null,mejor_gestion_canal:f.mg?f.mg.canal:null,mejor_gestion_fecha:f.mg?f.mg.f:null,mejor_asesor:f.mgAsesor?f.mgAsesor.label:null,mejor_bot_ia:f.mgIA?f.mgIA.label:null,mejor_bot_cognitivo:f.mgCog?f.mgCog.label:null,intentos:f.intentos,contactos_directos:f.directos,ultima_gestion_fecha:f.ultima?f.ultima.f:null,ultimo_asesor:f.ultAsesor||null,pdp_fecha:f.pdp?f.pdp.pdpF:null,pdp_valor:f.pdp?f.pdp.pdpV:null,pdp_estado:f.pdpEstado||null,fecha_corte:corte}));
+  await enLotes(om,1000, async lote=>{ const {error}=await sb.from("obligacion_mes").upsert(lote,{onConflict:"mes,llave"}); if(error) throw new Error("obligacion_mes: "+error.message); });
+  log("  ✓ foto mensual por obligación");
+  const mov=R.filas.filter(f=>f.novedad && !["Sin cambio","Sin comparación (falta base de ayer)"].includes(f.novedad)).map(f=>({fecha:corte,llave:f.llave,producto:f.producto,rango_ayer:f.rango_ayer||null,rango_hoy:f.rango,novedad:f.novedad,deuda_actual:f.deuda}))
+    .concat(R.salieron.map(s=>({fecha:corte,llave:s.llave,producto:s.producto,rango_ayer:s.rango,rango_hoy:null,novedad:"Salió de la base",deuda_actual:s.deuda})));
+  await enLotes(mov,1000, async lote=>{ const {error}=await sb.from("movimientos_diarios").upsert(lote,{onConflict:"fecha,llave"}); if(error) throw new Error("movimientos: "+error.message); });
+  log("  ✓ movimientos del día ("+mov.length+")");
+  const ind=R.indicadores.map(i=>({fecha:corte,...i}));
+  await enLotes(ind,1000, async lote=>{ const {error}=await sb.from("indicadores_diarios").upsert(lote,{onConflict:"fecha,dimension,valor_dimension,metrica"}); if(error) throw new Error("indicadores: "+error.message); });
+  log("  ✓ indicadores ("+ind.length+")");
+  const {error}=await sb.from("cargas").insert({fecha_corte:corte,archivos:R.archivos,conciliacion:R.concil.map(({_tipo,_hoja,...c})=>c)});
+  if(error) throw new Error("cargas: "+error.message);
+  log("  ✓ registro de la carga");
+}
+
+/* ================== PROCESO PRINCIPAL ================== */
+let RESULT=null;
+$("fCorte").value = dateToISO(new Date());
+$("btnProc").onclick = async ()=>{
+  const btn=$("btnProc"); btn.disabled=true; logEl.innerHTML=""; $("secRes").classList.add("hide"); $("saveMsg").textContent="";
+  try{
+    const corte=$("fCorte").value;
+    if(!corte) throw new Error("Selecciona la fecha de corte.");
+    if(!$("fHoy").files[0]) throw new Error("Falta la base de Alocredit de HOY.");
+    const conc=[]; const archivos=[];
+    log("Leyendo base de hoy: "+$("fHoy").files[0].name); await sleep(20);
+    const hojasHoy=await leerLibro($("fHoy").files[0]); archivos.push({rol:"base_hoy",nombre:$("fHoy").files[0].name});
+    const B=cargarBase(hojasHoy,"Base HOY",conc);
+    if(!B.mapa.size) throw new Error("La base de hoy no tiene obligaciones reconocibles (faltan columnas llave / cedula).");
+    log("  ✓ "+B.mapa.size+" obligaciones");
+    let A=null;
+    if($("fAyer").files[0]){
+      log("Leyendo base de ayer: "+$("fAyer").files[0].name); await sleep(20);
+      A=cargarBase(await leerLibro($("fAyer").files[0]),"Base AYER",conc); archivos.push({rol:"base_ayer",nombre:$("fAyer").files[0].name});
+      log("  ✓ "+A.mapa.size+" obligaciones");
+    }
+    let hojasG=[];
+    for(const f of $("fGest").files){ log("Leyendo gestión: "+f.name); await sleep(20); hojasG=hojasG.concat(await leerLibro(f)); archivos.push({rol:"gestion",nombre:f.name}); }
+    const G=cargarGestiones(hojasG,conc,corte);
+    log("  ✓ "+G.lista.length+" gestiones válidas del mes");
+    const ctx=await leerContexto(corte);
+    RESULT=construir(B,A,G,conc,corte,ctx,archivos);
+    pintar(RESULT);
+    log("Proceso terminado.","ok");
+    $("estado").textContent="Listo. Revisa la conciliación y descarga el Excel.";
+    if(sb && usuario && !MODO_PRUEBA){
+      try{ await guardar(RESULT); $("saveMsg").textContent="✓ Histórico guardado en Supabase"; $("saveMsg").className="ok"; }
+      catch(e){ log("✗ Error guardando: "+e.message,"err"); $("saveMsg").textContent="✗ No se guardó el histórico. El Excel sí está disponible. Avísale a Federico."; $("saveMsg").className="err"; }
+    } else { $("saveMsg").textContent="Modo prueba: no se guardó histórico."; }
+  }catch(e){ log("✗ "+e.message,"err"); $("estado").textContent="Hubo un error. Lee el mensaje en rojo."; console.error(e); }
+  finally{ btn.disabled=false; }
+};
+
+function mejor(a,b){ if(!a) return b; if(!b) return a; if(b.peso!==a.peso) return b.peso<a.peso?b:a; return (b.f+b.t)>(a.f+a.t)?b:a; }
+function etiquetaG(x){ return x? `${x.label} · ${x.canal} · ${fmtDMY(x.f)}` : ""; }
+
+function construir(B,A,G,conc,corte,ctx,archivos){
+  const mesIni=inicioMes(corte), fin=finDeMes(corte);
+  // índice cédula -> llaves
+  const porCed=new Map();
+  for(const o of B.mapa.values()){ if(!o.cedula) continue; if(!porCed.has(o.cedula)) porCed.set(o.cedula,[]); porCed.get(o.cedula).push(o.llave); }
+  // agrupar gestiones por cédula
+  const gPorCed=new Map(); const sinCruce=new Map();
+  for(const x of G.lista){
+    const ok=porCed.has(x.ced);
+    if(ok){ if(!gPorCed.has(x.ced)) gPorCed.set(x.ced,[]); gPorCed.get(x.ced).push(x); }
+    else { const k=x.ced; const s=sinCruce.get(k)||{cedula:k,gestiones:0,canales:new Set(),ultima:""}; s.gestiones++; s.canales.add(x.canal); if(x.f>s.ultima) s.ultima=x.f; sinCruce.set(k,s); }
+  }
+  // conciliación exacta por hoja de gestión
+  const porHoja={}; for(const x of G.lista){ const c=porHoja[x.hk]=porHoja[x.hk]||{si:0,no:0}; if(porCed.has(x.ced)) c.si++; else c.no++; }
+  for(const c of conc){ if(!c._hoja) continue; const v=porHoja[c._hoja]||{si:0,no:0}; c.cruzan=v.si; c.no_cruzan=v.no; }
+
+  const filas=[]; const salieron=[];
+  for(const o of B.mapa.values()){
+    const f={...o};
+    // rodamiento
+    const pagoHoy=esPago(o.rango);
+    if(A){
+      const y=A.mapa.get(o.llave);
+      f.rango_ayer = y? y.rango : "";
+      if(!y) f.novedad = pagoHoy?"Pagó (nuevo)":"Nuevo";
+      else if(pagoHoy && !esPago(y.rango)) f.novedad="Pagó";
+      else if(pagoHoy) f.novedad="Sigue en 0";
+      else { const a=ordenRango(y.rango), b=ordenRango(o.rango); f.novedad = (a==null||b==null)?"Sin cambio":(b<a?"Mejoró franja":(b>a?"Empeoró franja":"Sin cambio")); }
+      f.pago_hoy = (f.novedad==="Pagó"||f.novedad==="Pagó (nuevo)");
+    } else { f.rango_ayer=""; f.novedad = pagoHoy?"En 0 (pagó)":"Sin comparación (falta base de ayer)"; f.pago_hoy=false; }
+    // días calculados
+    const ini = (o.fecha_asig && o.fecha_asig>mesIni) ? o.fecha_asig : mesIni;
+    f.dias_hoy = o.dias_ini==null?null: o.dias_ini + Math.max(0,diasEntre(ini,corte));
+    f.dias_fin = o.dias_ini==null?null: o.dias_ini + Math.max(0,diasEntre(ini,fin));
+    f.rango_calc_hoy = rangoPorDias(f.dias_hoy); f.rango_fin = rangoPorDias(f.dias_fin);
+    // gestiones
+    const gs = gPorCed.get(o.cedula)||[];
+    let mg=null,mA=null,mI=null,mC=null,ult=null,ultA=null,pdp=null; let dir=0, nA=0,nI=0,nC=0;
+    for(const x of gs){
+      mg=mejor(mg,x);
+      if(x.origen==="crm"){ mA=mejor(mA,x); nA++; if(!ultA || (x.f+x.t)>(ultA.f+ultA.t)) ultA=x; }
+      else if(x.origen==="bot_ia"){ mI=mejor(mI,x); nI++; }
+      else { mC=mejor(mC,x); nC++; }
+      if(x.directo) dir++;
+      if(!ult || (x.f+x.t)>(ult.f+ult.t)) ult=x;
+      if(x.pdpF || CODIGOS_PDP.some(c=>x.label.startsWith(c)) || x.label==="COMPROMISO DE PAGO"){ if(!pdp || (x.f+x.t)>(pdp.f+pdp.t)) pdp=x; }
+    }
+    Object.assign(f,{mg,mgAsesor:mA,mgIA:mI,mgCog:mC,ultima:ult,ultAsesor:ultA?ultA.asesor:"",pdp,intentos:gs.length,intA:nA,intI:nI,intC:nC,directos:dir});
+    const h=ctx[o.llave]||{};
+    f.primera_llegada = h.p ? (o.fecha_asig && o.fecha_asig<h.p ? o.fecha_asig : h.p) : (o.fecha_asig||"");
+    const ultPago = [h.u||"", f.pago_hoy?corte:""].sort().pop();
+    if(pdp){
+      if(ultPago && ultPago>=pdp.f) f.pdpEstado="Con pago detectado";
+      else if(f.novedad==="Mejoró franja") f.pdpEstado="Mejoró franja (posible pago parcial)";
+      else if(pdp.pdpF && pdp.pdpF>=corte) f.pdpEstado="Vigente";
+      else if(pdp.pdpF) f.pdpEstado="Vencida sin pago detectado";
+      else f.pdpEstado="Sin fecha de promesa";
+    } else f.pdpEstado="";
+    f.hist = h.g||{};
+    filas.push(f);
+  }
+  if(A){ for(const y of A.mapa.values()) if(!B.mapa.has(y.llave)) salieron.push(y); }
+
+  // ======= indicadores =======
+  const ind=[]; const add=(dim,val,met,v)=>ind.push({dimension:dim,valor_dimension:String(val),metrica:met,valor:(v==null||!isFinite(v))?null:Math.round(v*100)/100});
+  const grupos={total:()=>"TOTAL",producto:f=>f.producto,franja:f=>f.rango_ini||"(vacío)"};
+  for(const [dim,fn] of Object.entries(grupos)){
+    const agg={};
+    for(const f of filas){ const k=fn(f); const a=agg[k]=agg[k]||{n:0,deuda:0,capital:0,gest:0,dir:0,int:0,pdp:0,pdpv:0,nuevo:0,pago:0,mej:0,emp:0};
+      a.n++; a.deuda+=f.deuda||0; a.capital+=f.capital||0; if(f.intentos>0)a.gest++; if(f.directos>0)a.dir++; a.int+=f.intentos; if(f.pdp){a.pdp++; a.pdpv+=f.pdp.pdpV||0;}
+      if(f.novedad.startsWith("Nuevo")||f.novedad==="Pagó (nuevo)")a.nuevo++; if(f.pago_hoy)a.pago++; if(f.novedad==="Mejoró franja")a.mej++; if(f.novedad==="Empeoró franja")a.emp++; }
+    for(const [k,a] of Object.entries(agg)){
+      add(dim,k,"obligaciones",a.n); add(dim,k,"deuda_total",a.deuda); add(dim,k,"capital_total",a.capital);
+      add(dim,k,"gestionadas_mes",a.gest); add(dim,k,"cobertura",a.n?a.gest/a.n:null); add(dim,k,"con_contacto_directo",a.dir); add(dim,k,"contactabilidad_directa",a.gest?a.dir/a.gest:null);
+      add(dim,k,"intentos_mes",a.int); add(dim,k,"intensidad",a.gest?a.int/a.gest:null); add(dim,k,"con_pdp",a.pdp); add(dim,k,"valor_pdp",a.pdpv); add(dim,k,"efectividad_pdp",a.dir?a.pdp/a.dir:null);
+      add(dim,k,"nuevos",a.nuevo); add(dim,k,"pagos_detectados",a.pago); add(dim,k,"mejoraron_franja",a.mej); add(dim,k,"empeoraron_franja",a.emp);
+    }
+  }
+  if(A) add("total","TOTAL","salieron_base",salieron.length);
+  // por canal y asesor (gestiones cruzadas)
+  const canal={}, ases={};
+  for(const [ced,gs] of gPorCed){ for(const x of gs){ const c=canal[x.canal]=canal[x.canal]||{i:0,d:0,ind:0,p:0,ced:new Set()}; c.i++; if(x.directo)c.d++; if(x.indirecto)c.ind++; if(x.peso===1)c.p++; c.ced.add(ced);
+    if(x.origen==="crm"){ const a=ases[x.asesor]=ases[x.asesor]||{i:0,d:0,p:0,dias:new Set(),hor:{}}; a.i++; if(x.directo)a.d++; if(CODIGOS_PDP.some(cc=>x.label.startsWith(cc)))a.p++; a.dias.add(x.f);
+      const k=x.f; const hr=a.hor[k]=a.hor[k]||[x.t,x.t]; if(x.t<hr[0])hr[0]=x.t; if(x.t>hr[1])hr[1]=x.t; } } }
+  for(const [k,c] of Object.entries(canal)){ add("canal",k,"intentos",c.i); add("canal",k,"contactos_directos",c.d); add("canal",k,"contactos_indirectos",c.ind); add("canal",k,"pdp_o_compromiso",c.p); add("canal",k,"deudores_gestionados",c.ced.size); }
+  for(const [k,a] of Object.entries(ases)){ let horas=0; for(const [h0,h1] of Object.values(a.hor)){ horas+=Math.max(0.5,(toS(h1)-toS(h0))/3600); }
+    add("asesor",k||"(sin login)","gestiones",a.i); add("asesor",k||"(sin login)","contactos_directos",a.d); add("asesor",k||"(sin login)","pdp",a.p); add("asesor",k||"(sin login)","dias_trabajados",a.dias.size); add("asesor",k||"(sin login)","gestiones_por_hora",horas?a.i/horas:null); }
+  add("alertas","TOTAL","tipificacion_inconsistente",G.alertas.tipif.length); add("alertas","TOTAL","fuera_de_horario",G.alertas.horario.length);
+
+  return {corte,filas,salieron,sinCruce:[...sinCruce.values()],concil:conc,indicadores:ind,alertas:G.alertas,sinAccion:G.sinAccion,archivos,
+    totGest:G.lista.length, gestCruzan:G.lista.filter(x=>porCed.has(x.ced)).length, basesHoy:B, basesAyer:A};
+}
+function toS(t){ const [h,m,s]=t.split(":").map(Number); return h*3600+m*60+(s||0); }
+
+/* ================== PANTALLA ================== */
+function pintar(R){
+  const f=R.filas; const tot=f.length;
+  const gest=f.filter(x=>x.intentos>0).length, dir=f.filter(x=>x.directos>0).length, pdp=f.filter(x=>x.pdp).length;
+  const deuda=f.reduce((s,x)=>s+(x.deuda||0),0);
+  const nov=k=>f.filter(x=>x.novedad===k).length;
+  const k=[["Obligaciones",fmtN(tot)],["Deuda asignada","$"+fmtN(deuda)],["Gestionadas en el mes",fmtN(gest)+" · "+fmtP(gest/tot)],["Con contacto directo",fmtN(dir)+" · "+fmtP(gest?dir/gest:0)],["Con promesa / compromiso",fmtN(pdp)],
+    ["Nuevos",R.basesAyer?fmtN(nov("Nuevo")+nov("Pagó (nuevo)")):"–"],["Pagaron (rango 0)",R.basesAyer?fmtN(nov("Pagó")+nov("Pagó (nuevo)")):fmtN(nov("En 0 (pagó)"))],["Mejoraron franja",R.basesAyer?fmtN(nov("Mejoró franja")):"–"],["Empeoraron franja",R.basesAyer?fmtN(nov("Empeoró franja")):"–"],["Salieron de la base",R.basesAyer?fmtN(R.salieron.length):"–"],
+    ["Tipificaciones inconsistentes",fmtN(R.alertas.tipif.length)],["Gestiones fuera de horario",fmtN(R.alertas.horario.length)]];
+  $("kpis").innerHTML=k.map(([a,b])=>`<div class="kpi"><b>${b}</b><span>${a}</span></div>`).join("");
+  const rows=R.concil.map(c=>`<tr><td>${esc(c.tipo)}</td><td>${esc(c.archivo)}<br><span class="hint">${esc(c.hoja)}</span></td><td class="n">${fmtN(c.leidas)}</td><td class="n">${fmtN(c.validas)}</td><td class="n">${fmtN(c.duplicadas)}</td><td class="n">${c.cruzan===""?"":fmtN(c.cruzan)}</td><td class="n">${c.no_cruzan===""?"":fmtN(c.no_cruzan)}</td><td>${esc(c.nota)}</td></tr>`).join("");
+  let extra=`<p class="hint">Gestiones válidas del mes: <b>${fmtN(R.totGest)}</b> · cruzan con la base de hoy: <b>${fmtN(R.gestCruzan)}</b> (${fmtP(R.totGest?R.gestCruzan/R.totGest:0)}) · cédulas gestionadas que no están en la base: <b>${fmtN(R.sinCruce.length)}</b> (ver hoja Sin_cruce).</p>`;
+  if(R.sinAccion) extra+=`<p class="warn">⚠ El informe del CRM no trae la columna "Acción": no se puede separar llamada de WhatsApp. Se reporta como "Asesor".</p>`;
+  $("concil").innerHTML=`<table><thead><tr><th>Tipo</th><th>Archivo / hoja</th><th>Filas leídas</th><th>Válidas</th><th>Duplicadas</th><th>Cruzan</th><th>No cruzan</th><th>Notas</th></tr></thead><tbody>${rows}</tbody></table>`+extra;
+  $("secRes").classList.remove("hide");
+}
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ================== EXCEL ================== */
+function hojaDesde(encabezados, filas, colsFecha){
+  const ws=XLSX.utils.aoa_to_sheet([encabezados,...filas]);
+  const rng=XLSX.utils.decode_range(ws["!ref"]);
+  for(const c of colsFecha){ for(let r=1;r<=rng.e.r;r++){ const ref=XLSX.utils.encode_cell({r,c}); const cell=ws[ref]; if(cell && typeof cell.v==="string" && /^\d{4}-\d{2}-\d{2}$/.test(cell.v)){ ws[ref]={t:"n",v:isoToSerial(cell.v),z:"dd/mm/yyyy"}; } } }
+  ws["!cols"]=encabezados.map(h=>({wch:Math.min(40,Math.max(10,String(h).length+2))}));
+  ws["!autofilter"]={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:0,c:encabezados.length-1}})};
+  return ws;
+}
+$("btnXlsx").onclick=()=>{
+  const R=RESULT; if(!R) return;
+  const m1=mesAnterior(R.corte,1), m2=mesAnterior(R.corte,2), m3=mesAnterior(R.corte,3);
+  const H=["Cédula","Llave","Producto","Contrato","Estado","Cliente","Teléfono","Correo","Ciudad","Fecha asignación (Alocredit)","Primera llegada (histórico)",
+    "Capital pendiente","Gastos vencidos","Deuda actual","Valor vencido","Comisión","Días mora inicio mes","Rango inicial","Rango hoy (Alocredit)","Rango ayer","Novedad",
+    "Días mora calculados hoy","Rango calculado hoy","Días mora fin de mes","Rango fin de mes",
+    "Mejor gestión del mes","Peso","Canal mejor gestión","Fecha mejor gestión","Mejor gestión asesor","Mejor gestión bot IA","Mejor gestión bot cognitivo",
+    "Intentos mes (total)","Intentos asesor","Intentos bot IA","Intentos bot cognitivo","Contactos directos mes","Fecha última gestión","Canal última gestión","Último asesor",
+    "Fecha PDP","Valor PDP","Canal PDP","Estado PDP","Gestionada en el mes",`Mejor gestión ${m1}`,`Mejor gestión ${m2}`,`Mejor gestión ${m3}`];
+  const D=R.filas.map(f=>[f.cedula,f.llave,f.producto,f.contrato,f.estado,f.cliente,f.telefono,f.correo,f.ciudad,f.fecha_asig,f.primera_llegada,
+    f.capital,f.gastos,f.deuda,f.vencido,f.comision,f.dias_ini,f.rango_ini,f.rango,f.rango_ayer,f.novedad,
+    f.dias_hoy,f.rango_calc_hoy,f.dias_fin,f.rango_fin,
+    f.mg?f.mg.label:"Sin gestión",f.mg?f.mg.peso:null,f.mg?f.mg.canal:"",f.mg?f.mg.f:"",f.mgAsesor?f.mgAsesor.label:"",f.mgIA?f.mgIA.label:"",f.mgCog?f.mgCog.label:"",
+    f.intentos,f.intA,f.intI,f.intC,f.directos,f.ultima?f.ultima.f:"",f.ultima?f.ultima.canal:"",f.ultAsesor,
+    f.pdp?f.pdp.pdpF||"":"",f.pdp?f.pdp.pdpV:null,f.pdp?f.pdp.canal:"",f.pdpEstado,f.intentos>0?"SI":"NO",f.hist[m1]||"",f.hist[m2]||"",f.hist[m3]||""]);
+  const fechaCols=[9,10,28,37,40];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,hojaDesde(H,D,fechaCols),"Seguimiento");
+  const C=R.concil.map(c=>[c.tipo,c.archivo,c.hoja,c.leidas,c.validas,c.duplicadas,c.cruzan,c.no_cruzan,c.nota]);
+  C.push([],["Gestiones válidas del mes",R.totGest],["Gestiones que cruzan con la base de hoy",R.gestCruzan],["Cédulas gestionadas que no están en la base",R.sinCruce.length],["Obligaciones en base de hoy",R.filas.length],["Salieron de la base (vs ayer)",R.basesAyer?R.salieron.length:"sin base de ayer"],["Fecha de corte",R.corte],["Versión",VERSION]);
+  XLSX.utils.book_append_sheet(wb,hojaDesde(["Tipo","Archivo","Hoja","Filas leídas","Válidas","Duplicadas","Cruzan","No cruzan","Notas"],C,[]),"Conciliacion");
+  if(R.basesAyer) XLSX.utils.book_append_sheet(wb,hojaDesde(["Cédula","Llave","Producto","Cliente","Rango ayer","Deuda ayer"],R.salieron.map(s=>[s.cedula,s.llave,s.producto,s.cliente,s.rango,s.deuda]),[]),"Salieron");
+  XLSX.utils.book_append_sheet(wb,hojaDesde(["Cédula","Gestiones en el mes","Canales","Última gestión"],R.sinCruce.map(s=>[s.cedula,s.gestiones,[...s.canales].join(", "),s.ultima]),[3]),"Sin_cruce");
+  XLSX.utils.book_append_sheet(wb,hojaDesde(["Dimensión","Valor","Métrica","Resultado"],R.indicadores.map(i=>[i.dimension,i.valor_dimension,i.metrica,i.valor]),[]),"Indicadores");
+  XLSX.utils.book_append_sheet(wb,hojaDesde(["Cédula","Fecha","Hora","Asesor","Problema"],R.alertas.tipif.map(a=>[a.cedula,a.fecha,a.hora,a.asesor,a.problema]),[1]),"Alerta_tipificacion");
+  XLSX.utils.book_append_sheet(wb,hojaDesde(["Cédula","Fecha","Hora","Asesor","Canal"],R.alertas.horario.map(a=>[a.cedula,a.fecha,a.hora,a.asesor,a.canal]),[1]),"Alerta_horario");
+  XLSX.writeFile(wb,`Seguimiento_Alocredit_${R.corte}.xlsx`,{compression:true});
+};
+
+initAuth();
+</script>
+</body>
+</html>
