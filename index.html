@@ -42,7 +42,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 <body>
 <header>
   <h1>Cruce diario Alocredit</h1>
-  <small>Cobyser · versión 1 · los archivos se procesan en este computador, no se suben a internet</small>
+  <small>Cobyser · versión 1.0.1 · los archivos se procesan en este computador, no se suben a internet</small>
 </header>
 <main>
 
@@ -77,9 +77,17 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
     <input id="fAyer" type="file" accept=".xlsx,.xls,.csv">
     <p class="hint">Sirve para ver nuevos, pagos y rodamiento de franjas. Si no la cargas, esas columnas quedan "Sin comparación".</p>
 
-    <label for="fGest">Archivos de gestión (puedes seleccionar varios a la vez)</label>
-    <input id="fGest" type="file" accept=".xlsx,.xls,.csv" multiple>
-    <p class="hint">Informe de gestión del CRM (del 1 del mes a hoy), resultados del bot cognitivo y del bot IA. La página reconoce cada uno por sus columnas.</p>
+    <label for="fCrm">Informe de gestión del CRM (asesores)</label>
+    <input id="fCrm" type="file" accept=".xlsx,.xls,.csv" multiple>
+    <p class="hint">Descargado del CRM con el rango del 1 del mes a hoy.</p>
+
+    <label for="fIA">Resultados del BOT IA (interactivo)</label>
+    <input id="fIA" type="file" accept=".xlsx,.xls,.csv" multiple>
+    <p class="hint">Puedes seleccionar varios archivos a la vez (uno por cada día de envío).</p>
+
+    <label for="fCog">Resultados del BOT cognitivo</label>
+    <input id="fCog" type="file" accept=".xlsx,.xls,.csv" multiple>
+    <p class="hint">Puedes seleccionar varios archivos a la vez (uno por cada envío).</p>
 
     <button id="btnProc">Procesar</button>
   </div>
@@ -112,7 +120,7 @@ td.n{text-align:right;font-variant-numeric:tabular-nums}
 /* ================== CONFIGURACIÓN ================== */
 const SUPABASE_URL = "https://oxtthfbdehljmhwylzfq.supabase.co";
 const SUPABASE_KEY = "sb_publishable_8TKEEHBvuI0mWkT6uWCkrA_5zEKYKgw";
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const MODO_PRUEBA = new URLSearchParams(location.search).get("prueba") === "1";
 
 /* Jerarquía de mejor gestión (1 = mejor). PROVISIONAL hasta confirmar en reglas de cálculo. */
@@ -384,7 +392,16 @@ $("btnProc").onclick = async ()=>{
       log("  ✓ "+A.mapa.size+" obligaciones");
     }
     let hojasG=[];
-    for(const f of $("fGest").files){ log("Leyendo gestión: "+f.name); await sleep(20); hojasG=hojasG.concat(await leerLibro(f)); archivos.push({rol:"gestion",nombre:f.name}); }
+    const cajas=[["fCrm","crm","CRM"],["fIA","bot_ia","Bot IA"],["fCog","bot_cog","Bot cognitivo"]];
+    for(const [id,esperado,nom] of cajas){
+      for(const f of $(id).files){
+        log("Leyendo "+nom+": "+f.name); await sleep(20);
+        const hs=await leerLibro(f);
+        const tipos=hs.map(tipoHoja).filter(t=>t && t!=="base");
+        if(tipos.length && !tipos.includes(esperado)) log("  ⚠ "+f.name+" no parece ser de "+nom+"; se procesa según sus columnas.","warn");
+        hojasG=hojasG.concat(hs); archivos.push({rol:esperado,nombre:f.name});
+      }
+    }
     const G=cargarGestiones(hojasG,conc,corte);
     log("  ✓ "+G.lista.length+" gestiones válidas del mes");
     const ctx=await leerContexto(corte);
